@@ -12,6 +12,7 @@ import { EventPreviewTable } from "@/ui/components/EventPreviewTable";
 import { PianoKeyboard } from "@/ui/components/PianoKeyboard";
 import { TimelineView } from "@/ui/components/TimelineView";
 import { LeadSheetView } from "@/ui/components/LeadSheetView";
+import { SheetMusicView } from "@/ui/components/SheetMusicView";
 import { SettingsPanel } from "@/ui/components/SettingsPanel";
 import { TransportBar } from "@/ui/components/TransportBar";
 import { TonePlaybackEngine } from "@/playback/toneEngine";
@@ -319,6 +320,13 @@ export function ChordStudio(): JSX.Element {
         <PianoKeyboard activeNotes={activeNotes} currentChordLabel={currentChordLabel} />
         <LeadSheetView events={resolved.events} />
       </div>
+
+      <SheetMusicView
+        events={resolved.events}
+        settings={settings}
+        hasParseErrors={parseResult.errors.length > 0}
+        activeEventIndex={activeEventIndex}
+      />
 
       <EventPreviewTable
         events={resolved.events}

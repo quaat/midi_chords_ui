@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "prod": "next build && next start",
+    "preview": "next build && next start",
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -15,6 +17,7 @@
     "clsx": "2.1.1",
     "lucide-react": "0.453.0",
     "next": "14.2.15",
+    "opensheetmusicdisplay": "1.9.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "tone": "15.1.22"

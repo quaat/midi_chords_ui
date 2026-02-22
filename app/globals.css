@@ -463,6 +463,64 @@ textarea {
   border-radius: 8px;
 }
 
+.notation-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.notation-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notation-controls label span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.notation-controls input[type="range"] {
+  width: 180px;
+}
+
+.notation-zoom-value {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  background: var(--bg-strong);
+}
+
+.notation-active {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.notation-empty {
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: color-mix(in oklab, var(--bg-strong) 88%, transparent);
+}
+
+.notation-container {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+  min-height: 280px;
+  max-height: 460px;
+  overflow: auto;
+  padding: 12px;
+}
+
+[data-theme="dark"] .notation-container {
+  background: #ffffff;
+}
+
 .table-shell {
   overflow: auto;
 }

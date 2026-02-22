@@ -39,6 +39,7 @@ A production-oriented Next.js web app for converting plain-text chord progressio
   - virtual keyboard (active notes highlighted)
   - chord block timeline with playhead
   - lead-sheet MVP (measure boxes + chord symbols)
+  - sheet music notation rendered from generated MusicXML via OpenSheetMusicDisplay (OSMD)
 
 ## Setup
 
@@ -88,6 +89,8 @@ src/
     chordParser.ts
     voicing.ts
     renderSequence.ts
+  notation/
+    generateMusicXml.ts
   midi/
     buildMidiFile.ts
   playback/
@@ -103,6 +106,7 @@ src/
     TimelineView.tsx
     PianoKeyboard.tsx
     LeadSheetView.tsx
+    SheetMusicView.tsx
     EventPreviewTable.tsx
   samples/
     progressions.ts

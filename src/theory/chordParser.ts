@@ -51,7 +51,7 @@ const BASE_QUALITIES: Array<{ pattern: RegExp; consume: (v: string) => number; k
   { pattern: /^(m7b5|ø)/, consume: (v) => v.match(/^(m7b5|ø)/)![0].length, kind: "halfdim", label: "Half-diminished" },
   { pattern: /^(dim7|o7)/, consume: (v) => v.match(/^(dim7|o7)/)![0].length, kind: "dim7", label: "Diminished 7" },
   { pattern: /^(dim|o)/, consume: (v) => v.match(/^(dim|o)/)![0].length, kind: "dim", label: "Diminished" },
-  { pattern: /^(aug|\+)/, consume: (v) => v.match(/^(aug|\+)/)![0].length, kind: "aug", label: "Augmented" },
+  { pattern: /^(aug|\+(?!5))/, consume: (v) => v.match(/^(aug|\+(?!5))/)![0].length, kind: "aug", label: "Augmented" },
   { pattern: /^(sus2)/, consume: (v) => v.match(/^sus2/)![0].length, kind: "sus2", label: "Suspended 2" },
   { pattern: /^(sus4|sus)/, consume: (v) => v.match(/^(sus4|sus)/)![0].length, kind: "sus4", label: "Suspended 4" },
   { pattern: /^(m6)/, consume: (v) => v.match(/^m6/)![0].length, kind: "min6", label: "Minor 6" },
@@ -64,8 +64,9 @@ const BASE_QUALITIES: Array<{ pattern: RegExp; consume: (v: string) => number; k
   { pattern: /^(6)/, consume: (v) => v.match(/^6/)![0].length, kind: "maj6", label: "Major 6" }
 ];
 
-const ALTERATION_TOKENS = ["#11", "#9", "#5", "b13", "b9", "b5"] as const;
+const ALTERATION_TOKENS = ["#11", "#9", "#5", "+5", "+", "b13", "b9", "b5"] as const;
 const ADD_TOKENS = ["add13", "add11", "add9", "add6", "add4", "add2"] as const;
+const SUSPENSION_TOKENS = ["sus4", "sus", "sus2"] as const;
 
 function normalizeSuffix(value: string): string {
   return value
@@ -208,6 +209,8 @@ function applyAlteration(intervals: Set<number>, token: (typeof ALTERATION_TOKEN
       replaceIntervalClass(intervals, 7, 6);
       break;
     case "#5":
+    case "+5":
+    case "+":
       replaceIntervalClass(intervals, 7, 8);
       break;
     case "b9":
@@ -268,6 +271,14 @@ function applyAddToken(intervals: Set<number>, token: (typeof ADD_TOKENS)[number
   }
 }
 
+function applySuspension(intervals: Set<number>, token: (typeof SUSPENSION_TOKENS)[number]): void {
+  const suspendedInterval = token === "sus2" ? 2 : 5;
+
+  replaceIntervalClass(intervals, 3, suspendedInterval);
+  replaceIntervalClass(intervals, 4, suspendedInterval);
+  addInterval(intervals, suspendedInterval);
+}
+
 export function parseChordSymbol(symbol: string): ChordDescription {
   const trimmed = symbol.trim();
   if (!trimmed) {
@@ -309,6 +320,18 @@ export function parseChordSymbol(symbol: string): ChordDescription {
     for (const token of ADD_TOKENS) {
       if (suffix.startsWith(token)) {
         applyAddToken(intervals, token);
+        suffix = suffix.slice(token.length);
+        consumed = true;
+        break;
+      }
+    }
+    if (consumed) {
+      continue;
+    }
+
+    for (const token of SUSPENSION_TOKENS) {
+      if (suffix.startsWith(token)) {
+        applySuspension(intervals, token);
         suffix = suffix.slice(token.length);
         consumed = true;
         break;
