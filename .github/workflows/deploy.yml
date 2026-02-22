@@ -25,6 +25,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Configure Pages
+        id: pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -43,7 +48,14 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          BASE_PATH: "/${{ github.event.repository.name }}"
+          BASE_PATH: ${{ github.event_name != 'pull_request' && steps.pages.outputs.base_path || '' }}
+
+      - name: Verify static export output
+        if: github.event_name != 'pull_request'
+        run: |
+          test -d out
+          test -f out/index.html
+          touch out/.nojekyll
 
       - name: Upload Pages artifact
         if: github.event_name != 'pull_request'
