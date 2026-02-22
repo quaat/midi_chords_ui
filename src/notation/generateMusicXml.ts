@@ -365,6 +365,13 @@ function splitNotesForGrandStaff(noteNumbers: number[]): { treble: number[]; bas
   };
 }
 
+function createMeasureTokenBuckets(): Record<StaffNumber, NotationToken[]> {
+  return {
+    1: [],
+    2: []
+  };
+}
+
 export function generateMusicXml(
   events: ResolvedEvent[],
   settings: SynthSettings
@@ -377,10 +384,10 @@ export function generateMusicXml(
     events.length > 0 ? Math.max(...events.map((event) => event.startTick + event.durationTicks)) : measureDivisions;
   const totalMeasures = Math.max(1, Math.ceil(totalTicks / measureDivisions));
 
-  const measureTokens: Array<Record<StaffNumber, NotationToken[]>> = Array.from({ length: totalMeasures }, () => ({
-    [TREBLE_STAFF]: [],
-    [BASS_STAFF]: []
-  }));
+  const measureTokens: Array<Record<StaffNumber, NotationToken[]>> = Array.from(
+    { length: totalMeasures },
+    createMeasureTokenBuckets
+  );
 
   events.forEach((event) => {
     const spans = splitEventAcrossMeasures(event, measureDivisions);
