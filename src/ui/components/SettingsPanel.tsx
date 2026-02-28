@@ -1,6 +1,6 @@
 "use client";
 
-import type { SynthSettings, VoicingMode } from "@/types";
+import type { ArpeggiateOctaves, SynthSettings, VoicingMode } from "@/types";
 
 const INSTRUMENTS = [
   "1 Acoustic Grand Piano",
@@ -144,6 +144,18 @@ export function SettingsPanel({
             <option value="open">open</option>
             <option value="spread">spread</option>
             <option value="root5_3up">root5_3up</option>
+          </select>
+        </label>
+        <label className="field">
+          <span>Arpeggiate</span>
+          <select
+            value={settings.arpeggiateOctaves}
+            onChange={(event) => set("arpeggiateOctaves", Number(event.target.value) as ArpeggiateOctaves)}
+          >
+            <option value={0}>Off (Block Chord)</option>
+            <option value={1}>1 Octave</option>
+            <option value={2}>2 Octaves</option>
+            <option value={3}>3 Octaves</option>
           </select>
         </label>
         <label className="field checkbox-field">

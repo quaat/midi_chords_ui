@@ -1,5 +1,7 @@
 import type { ResolvedEvent } from "@/types";
 import type { PlaybackEngine } from "@/playback/types";
+import type { ArpeggiateOctaves } from "@/types";
+import { buildArpeggiatedNotes } from "@/playback/arpeggiation";
 
 export interface SchedulerCallbacks {
   onProgress?: (seconds: number, totalSeconds: number) => void;
@@ -22,6 +24,7 @@ export class PlaybackScheduler {
     private totalSeconds: number,
     private velocity: number,
     private channel: number,
+    private arpeggiateOctaves: ArpeggiateOctaves,
     private callbacks: SchedulerCallbacks = {}
   ) {}
 
@@ -138,8 +141,15 @@ export class PlaybackScheduler {
 
       const delay = Math.max(0, event.startSeconds - nowSec);
       if (!event.isRest) {
-        event.noteNumbers.forEach((note) => {
-          this.engine.scheduleNote(note, this.velocity, delay, event.durationSeconds, this.channel);
+        const arpeggiated = buildArpeggiatedNotes(event.noteNumbers, event.durationSeconds, this.arpeggiateOctaves, 0.02);
+        arpeggiated.forEach((noteEvent) => {
+          this.engine.scheduleNote(
+            noteEvent.note,
+            this.velocity,
+            delay + noteEvent.startOffset,
+            noteEvent.duration,
+            this.channel
+          );
         });
       }
       this.nextEventIndex += 1;

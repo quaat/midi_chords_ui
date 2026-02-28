@@ -42,4 +42,28 @@ describe("parseChordSymbol", () => {
     expect(chord.intervals).toEqual([0, 5, 7, 10]);
     expect(chord.intervals).not.toContain(4);
   });
+
+  it("supports minor-major seventh notation", () => {
+    const shortForm = parseChordSymbol("Cm(maj7)");
+    expect(shortForm.intervals).toEqual(expect.arrayContaining([0, 3, 7, 11]));
+    expect(shortForm.intervals).not.toContain(10);
+
+    const longForm = parseChordSymbol("Cmin(maj7)");
+    expect(longForm.intervals).toEqual(expect.arrayContaining([0, 3, 7, 11]));
+    expect(longForm.intervals).not.toContain(10);
+  });
+
+  it("supports single-note root-only chords with suffix 1", () => {
+    const c = parseChordSymbol("C1");
+    expect(c.rootName).toBe("C");
+    expect(c.intervals).toEqual([0]);
+
+    const d = parseChordSymbol("D1");
+    expect(d.rootName).toBe("D");
+    expect(d.intervals).toEqual([0]);
+
+    const bb = parseChordSymbol("Bb1");
+    expect(bb.rootName).toBe("Bb");
+    expect(bb.intervals).toEqual([0]);
+  });
 });

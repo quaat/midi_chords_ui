@@ -1,4 +1,5 @@
 import type { RenderSequenceResult, SynthSettings } from "@/types";
+import { buildArpeggiatedNotes } from "@/playback/arpeggiation";
 
 interface TimedEvent {
   tick: number;
@@ -112,20 +113,24 @@ export function buildMidiFile(sequence: RenderSequenceResult, settings: SynthSet
       return;
     }
     const endTick = event.startTick + event.durationTicks;
+    const arpeggiated = buildArpeggiatedNotes(event.noteNumbers, event.durationTicks, settings.arpeggiateOctaves, 1);
 
-    event.noteNumbers.forEach((note, idx) => {
+    arpeggiated.forEach((noteEvent, idx) => {
+      const noteStart = event.startTick + Math.max(0, Math.round(noteEvent.startOffset));
+      if (noteStart >= endTick) {
+        return;
+      }
+      const noteDuration = Math.max(1, Math.round(noteEvent.duration));
+      const noteEnd = Math.min(endTick, noteStart + noteDuration);
       events.push({
-        tick: event.startTick,
+        tick: noteStart,
         priority: 10 + idx,
-        data: [0x90 | channel, note, velocity]
+        data: [0x90 | channel, noteEvent.note, velocity]
       });
-    });
-
-    event.noteNumbers.forEach((note, idx) => {
       events.push({
-        tick: endTick,
+        tick: noteEnd,
         priority: 40 + idx,
-        data: [0x80 | channel, note, 0]
+        data: [0x80 | channel, noteEvent.note, 0]
       });
     });
   });

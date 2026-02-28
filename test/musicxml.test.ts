@@ -13,6 +13,7 @@ const settings: SynthSettings = {
   baseOctave: 4,
   bassOctave: 2,
   voicingMode: "close",
+  arpeggiateOctaves: 0,
   voiceLeading: true,
   maxSpread: 30,
   minNote: 24,

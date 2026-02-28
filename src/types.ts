@@ -4,6 +4,7 @@ export type TimeSignature = {
 };
 
 export type VoicingMode = "close" | "open" | "spread" | "root5_3up";
+export type ArpeggiateOctaves = 0 | 1 | 2 | 3;
 
 export interface SynthSettings {
   tempoBpm: number;
@@ -16,6 +17,7 @@ export interface SynthSettings {
   baseOctave: number;
   bassOctave: number;
   voicingMode: VoicingMode;
+  arpeggiateOctaves: ArpeggiateOctaves;
   voiceLeading: boolean;
   maxSpread: number;
   minNote: number;

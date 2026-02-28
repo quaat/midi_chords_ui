@@ -3,7 +3,9 @@ import { parseNoteName } from "@/theory/notes";
 
 type BaseQualityKind =
   | "maj"
+  | "root"
   | "min"
+  | "minMaj7"
   | "dim"
   | "aug"
   | "sus2"
@@ -45,6 +47,12 @@ const BASE_QUALITIES: Array<{ pattern: RegExp; consume: (v: string) => number; k
   { pattern: /^(maj9)/, consume: (v) => v.match(/^maj9/)![0].length, kind: "maj9", label: "Major 9" },
   { pattern: /^(maj7)/, consume: (v) => v.match(/^maj7/)![0].length, kind: "maj7", label: "Major 7" },
   { pattern: /^(maj6)/, consume: (v) => v.match(/^maj6/)![0].length, kind: "maj6", label: "Major 6" },
+  {
+    pattern: /^(m\(maj7\))/,
+    consume: (v) => v.match(/^m\(maj7\)/)![0].length,
+    kind: "minMaj7",
+    label: "Minor Major 7"
+  },
   { pattern: /^(m13)/, consume: (v) => v.match(/^m13/)![0].length, kind: "min13", label: "Minor 13" },
   { pattern: /^(m11)/, consume: (v) => v.match(/^m11/)![0].length, kind: "min11", label: "Minor 11" },
   { pattern: /^(m9)/, consume: (v) => v.match(/^m9/)![0].length, kind: "min9", label: "Minor 9" },
@@ -61,7 +69,8 @@ const BASE_QUALITIES: Array<{ pattern: RegExp; consume: (v: string) => number; k
   { pattern: /^(11)/, consume: (v) => v.match(/^11/)![0].length, kind: "dom11", label: "Dominant 11" },
   { pattern: /^(9)/, consume: (v) => v.match(/^9/)![0].length, kind: "dom9", label: "Dominant 9" },
   { pattern: /^(7)/, consume: (v) => v.match(/^7/)![0].length, kind: "dom7", label: "Dominant 7" },
-  { pattern: /^(6)/, consume: (v) => v.match(/^6/)![0].length, kind: "maj6", label: "Major 6" }
+  { pattern: /^(6)/, consume: (v) => v.match(/^6/)![0].length, kind: "maj6", label: "Major 6" },
+  { pattern: /^(1)$/, consume: (v) => v.match(/^1$/)![0].length, kind: "root", label: "Root" }
 ];
 
 const ALTERATION_TOKENS = ["#11", "#9", "#5", "+5", "+", "b13", "b9", "b5"] as const;
@@ -100,9 +109,16 @@ function buildBaseIntervals(kind: BaseQualityKind): { intervals: Set<number>; la
     case "maj":
       addTriad("maj");
       return { intervals, label: "Major" };
+    case "root":
+      addInterval(intervals, 0);
+      return { intervals, label: "Root" };
     case "min":
       addTriad("min");
       return { intervals, label: "Minor" };
+    case "minMaj7":
+      addTriad("min");
+      addInterval(intervals, 11);
+      return { intervals, label: "Minor Major 7" };
     case "dim":
       addTriad("dim");
       return { intervals, label: "Diminished" };
