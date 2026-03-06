@@ -26,6 +26,10 @@ A production-oriented Next.js web app for converting plain-text chord progressio
   - add tones: add2/add4/add6/add9/add11/add13
   - alterations: b5/#5/b9/#9/#11/b13
   - slash chords with lower bass handling
+- Chord Pathways panel:
+  - expands concrete entered symbols with deterministic pathway modes (secondary dominants, inversions, tritone substitutions, secondary ii-V variants)
+  - optional free-text turnaround append (symbol preserved as entered)
+  - splits the current event duration evenly across current + injected events (rounded to 6 decimals)
 - MIDI generation in browser:
   - single-track SMF with time signature, tempo, and program change at tick 0
   - chord note-ons/note-offs by event duration
@@ -87,6 +91,7 @@ src/
   theory/
     notes.ts
     chordParser.ts
+    pathways.ts
     voicing.ts
     renderSequence.ts
   notation/
@@ -101,6 +106,7 @@ src/
   ui/components/
     ChordStudio.tsx
     ChordEditor.tsx
+    ChordPathwaysPanel.tsx
     SettingsPanel.tsx
     TransportBar.tsx
     TimelineView.tsx
@@ -112,6 +118,7 @@ src/
     progressions.ts
 test/
   parser.test.ts
+  pathways.test.ts
   theory.test.ts
   voicing.test.ts
   smoke.test.ts

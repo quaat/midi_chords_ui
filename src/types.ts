@@ -73,3 +73,24 @@ export interface RenderSequenceResult {
   totalTicks: number;
   totalSeconds: number;
 }
+
+export type ChordPathwayMode =
+  | "secondaryDominant"
+  | "secondaryDominantFirstInversion"
+  | "secondaryDominantSecondInversion"
+  | "tritoneSubstitution"
+  | "secondaryTwoFive"
+  | "secondaryTwoFiveTritoneSub";
+
+export interface ChordPathwayOptions {
+  mode: ChordPathwayMode;
+  turnaroundChord?: string;
+  turnaroundDurationMeasures?: number;
+  decimalPrecision?: number;
+}
+
+export interface InjectChordPathwaysResult {
+  events: ParsedLineEvent[];
+  warnings: string[];
+  appendedTurnaroundSymbol?: string;
+}

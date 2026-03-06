@@ -8,6 +8,7 @@ import { resolveSequence } from "@/theory/renderSequence";
 import { buildMidiFile } from "@/midi/buildMidiFile";
 import type { SynthSettings } from "@/types";
 import { ChordEditor } from "@/ui/components/ChordEditor";
+import { ChordPathwaysPanel } from "@/ui/components/ChordPathwaysPanel";
 import { EventPreviewTable } from "@/ui/components/EventPreviewTable";
 import { PianoKeyboard } from "@/ui/components/PianoKeyboard";
 import { TimelineView } from "@/ui/components/TimelineView";
@@ -292,6 +293,12 @@ export function ChordStudio(): JSX.Element {
       <div className="content-grid">
         <aside className="compose-sidebar">
           <ChordEditor value={inputText} onChange={setInputText} errors={parseResult.errors} onCursorLineChange={setCursorLine} />
+          <ChordPathwaysPanel
+            sourceEvents={parseResult.events}
+            hasParseErrors={parseResult.errors.length > 0}
+            defaultTurnaroundMeasures={settings.defaultChordMeasures}
+            onApplyExpandedText={setInputText}
+          />
           <section className="compose-settings">
             <button
               className="icon-btn settings-toggle"

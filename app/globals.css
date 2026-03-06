@@ -224,6 +224,54 @@ textarea {
   font-size: 0.9rem;
 }
 
+.pathways-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pathways-controls {
+  display: grid;
+  gap: 8px;
+}
+
+.pathways-status {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}
+
+.pathways-status.error {
+  color: var(--error);
+}
+
+.pathways-warning-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--error);
+  font-size: 0.82rem;
+  display: grid;
+  gap: 4px;
+}
+
+.pathways-preview {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-height: 150px;
+  max-height: 240px;
+  padding: 8px 10px;
+  resize: vertical;
+  background: var(--bg-strong);
+  color: var(--text);
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.pathways-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .settings-grid {
   display: grid;
   gap: 8px;
