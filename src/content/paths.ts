@@ -1,0 +1,100 @@
+import type { LearningPath } from "@/model/contracts";
+import { draftMeta } from "@/content/authoring";
+
+/**
+ * Three entry routes (plan E31). Each unit list forms a read → listen → play → vary → apply
+ * journey: a concept page (read + listen to its examples), exercises (play), a variant or
+ * transfer exercise (vary), and a chart or routine (apply).
+ */
+export const paths: LearningPath[] = [
+  {
+    id: "path-foundations",
+    title: "Foundations",
+    description:
+      "From finding middle C to playing a simple song: notes, steps, intervals, triads, inversions, scales, pulse and simple progressions, finishing with Evening Loop.",
+    entry: "beginner",
+    units: [
+      { kind: "concept", id: "keyboard-geography" },
+      { kind: "exercise", id: "ex-find-notes" },
+      { kind: "concept", id: "whole-half-steps" },
+      { kind: "exercise", id: "ex-whole-half-steps" },
+      { kind: "concept", id: "intervals" },
+      { kind: "exercise", id: "ex-intervals-from-c" },
+      { kind: "concept", id: "triads-major-minor" },
+      { kind: "exercise", id: "ex-major-minor-triads" },
+      { kind: "concept", id: "triad-inversions" },
+      { kind: "exercise", id: "ex-c-triad-inversions" },
+      { kind: "concept", id: "pulse-rests-counting" },
+      { kind: "exercise", id: "ex-pulse-quarter-rests" },
+      { kind: "concept", id: "major-scale-degrees" },
+      { kind: "exercise", id: "ex-c-major-run" },
+      { kind: "exercise", id: "ex-c-major-run-timed" },
+      { kind: "concept", id: "diatonic-progressions" },
+      { kind: "exercise", id: "ex-i-iv-v-i-c" },
+      { kind: "exercise", id: "ex-i-vi-iv-v-c" },
+      { kind: "concept", id: "slash-chords" },
+      { kind: "exercise", id: "ex-slash-bass-c" },
+      { kind: "concept", id: "accompaniment-patterns" },
+      { kind: "exercise", id: "ex-bass-and-chord-c" },
+      { kind: "chart", id: "evening-loop" },
+      { kind: "routine", id: "routine-starter-15" },
+    ],
+    meta: draftMeta(),
+  },
+  {
+    id: "path-harmony-scales",
+    title: "Harmony and scales",
+    description:
+      "Minor and Dorian over the same tonic, scale patterns, diatonic harmony and melody harmonisation, sevenths and shells — applied in Dorian Drift.",
+    entry: "intermediate",
+    units: [
+      { kind: "concept", id: "natural-minor-scale" },
+      { kind: "concept", id: "major-minor-comparison" },
+      { kind: "exercise", id: "ex-d-natural-minor-run" },
+      { kind: "concept", id: "dorian-mode" },
+      { kind: "exercise", id: "ex-dorian-vs-minor-listen" },
+      { kind: "exercise", id: "ex-d-dorian-run" },
+      { kind: "concept", id: "scale-patterns-runs" },
+      { kind: "exercise", id: "ex-c-thirds-sequence" },
+      { kind: "concept", id: "harmonising-scale" },
+      { kind: "exercise", id: "ex-c-diatonic-triads" },
+      { kind: "concept", id: "harmonising-melody" },
+      { kind: "exercise", id: "ex-harmonise-melody" },
+      { kind: "concept", id: "seventh-chords" },
+      { kind: "exercise", id: "ex-seventh-chords-c" },
+      { kind: "concept", id: "shell-voicings" },
+      { kind: "exercise", id: "ex-ii-v-i-shells-c" },
+      { kind: "exercise", id: "ex-ii-v-i-shells-c-timed" },
+      { kind: "concept", id: "modal-vamp" },
+      { kind: "exercise", id: "ex-dorian-vamp-phrase" },
+      { kind: "chart", id: "dorian-drift" },
+      { kind: "exercise", id: "ex-dorian-free-improv" },
+    ],
+    meta: draftMeta(),
+  },
+  {
+    id: "path-voicing-sampler",
+    title: "Voicing sampler",
+    description:
+      "An advanced sampler, not a complete course: guide tones, rootless ii–V–I voicings with colour tones, transfer to F and B♭, a choice of valid alternatives, minor cadences and secondary dominants.",
+    entry: "advanced",
+    units: [
+      { kind: "concept", id: "guide-tones" },
+      { kind: "exercise", id: "ex-guide-tones-ii-v-i-c" },
+      { kind: "concept", id: "extensions-colour-tones" },
+      { kind: "concept", id: "rootless-voicings" },
+      { kind: "exercise", id: "ex-ii-v-i-rootless-c" },
+      { kind: "exercise", id: "ex-ii-v-i-rootless-f" },
+      { kind: "exercise", id: "ex-ii-v-i-rootless-bb" },
+      { kind: "exercise", id: "ex-ii-v-i-rootless-alternatives" },
+      { kind: "concept", id: "cadences" },
+      { kind: "exercise", id: "ex-minor-ii-v-i-shells" },
+      { kind: "concept", id: "secondary-dominants-tritone-subs" },
+      { kind: "exercise", id: "ex-secondary-dominant-c" },
+      { kind: "concept", id: "voice-leading-basics" },
+      { kind: "concept", id: "accompaniment-patterns" },
+      { kind: "chart", id: "evening-loop" },
+    ],
+    meta: draftMeta(),
+  },
+];
