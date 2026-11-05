@@ -250,7 +250,7 @@ function DorianInPractice({ onOpenExercise }: { onOpenExercise: (id: string) => 
           </div>
         </li>
         <li>
-          <p className="pls-learn-flow__step">Choose: an exact phrase over the vamp (scored), or free improvisation (recorded, not scored — the run's scoring does not apply).</p>
+          <p className="pls-learn-flow__step">Choose: an exact phrase over the vamp (scored), or free improvisation (recorded, not scored — the run&apos;s scoring does not apply).</p>
           <div className="pls-learn-actions">
             <button type="button" className="pls-btn pls-btn--small" onClick={() => setMessage(practiseExercise(runtime, "ex-dorian-vamp-phrase", { mode: "step" }))}>
               Exact phrase
