@@ -1,5 +1,5 @@
-import { ChordStudio } from "@/ui/components/ChordStudio";
+import { StudioApp } from "@/ui/workspace/StudioApp";
 
 export default function HomePage(): JSX.Element {
-  return <ChordStudio />;
+  return <StudioApp />;
 }

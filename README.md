@@ -1,130 +1,79 @@
-# Chord to MIDI Studio
+# Piano Learning Studio (midi_chords_ui)
 
-A production-oriented Next.js web app for converting plain-text chord progressions into a standard MIDI file, with synchronized playback and visualizations.
+A browser-only piano learning studio built with Next.js 14, React 18, and TypeScript. One persistent
+interactive piano sits under three modes:
 
-## Stack
+- **Explore** — inspect chords, inversions, voicings, scales and modes; hear A/B comparisons.
+- **Practice** — step practice (wait for an acceptable answer), timed practice with count-in and
+  falling notes, listening, and free play with recording; feedback separates pitch from timing.
+- **Create** — chord blocks or chord text, per-chord voicing recipes, Chord Pathways, saved
+  projects, MIDI and MusicXML/notation export.
 
-- Next.js 14 + React 18 + TypeScript
-- Browser-only app (no backend)
-- Tone.js internal synth fallback
-- Web MIDI device output (when browser/device support exists)
-- Vitest unit + smoke tests
+Content entry points open material into the same workspace: a searchable **Learn** catalogue
+with concept pages and three entry routes, a **Songs** collection with editable charts and
+play-along arrangements, and **My Practice** with routines, review suggestions, and progress
+kept distinct by evidence kind (read / listened / assisted / independent / transfer).
 
-## Features
+The previous text-to-MIDI studio is still reachable at `/legacy` during the migration.
 
-- Editor with line numbers and live parse errors (line + message + offending input)
-- Parser behavior aligned with the Python CLI spec:
-  - one event per line: `<chord_symbol> [| duration_measures]`
-  - ignores blank lines and `#` comments
-  - optional float durations and global default duration
-  - rests via `NC` / `N.C.`
-- Chord engine supports:
-  - triads: major, minor, dim, aug, sus2, sus4/sus
-  - 6ths: 6, maj6, m6/min6
-  - 7ths: 7, maj7, m7/min7, dim7/o7, m7b5/ø
-  - extensions: 9/11/13 + major/minor variants
-  - add tones: add2/add4/add6/add9/add11/add13
-  - alterations: b5/#5/b9/#9/#11/b13
-  - slash chords with lower bass handling
-- Chord Pathways panel:
-  - expands concrete entered symbols with deterministic pathway modes (secondary dominants, inversions, tritone substitutions, secondary ii-V variants)
-  - optional free-text turnaround append (symbol preserved as entered)
-  - splits the current event duration evenly across current + injected events (rounded to 6 decimals)
-- MIDI generation in browser:
-  - single-track SMF with time signature, tempo, and program change at tick 0
-  - chord note-ons/note-offs by event duration
-  - downloadable `.mid`
-- Playback and sync:
-  - play/pause/stop, loop, seek, and play-from-selected-event
-  - target A: Web MIDI output device (with picker + refresh)
-  - target B: internal Tone.js synth fallback
-  - synchronized timeline and keyboard highlighting
-- Visuals:
-  - virtual keyboard (active notes highlighted)
-  - chord block timeline with playhead
-  - lead-sheet MVP (measure boxes + chord symbols)
-  - sheet music notation rendered from generated MusicXML via OpenSheetMusicDisplay (OSMD)
+Plan and status: `midi_chords_ui-reimplementation-plan-2026-11-04.md`,
+`docs/exec-plans/active/piano-learning-studio.md`, `docs/baseline/`, `docs/adr/`.
 
 ## Setup
 
-1. Install dependencies:
-
 ```bash
-npm install
+npm ci
+npm run dev        # http://localhost:3000
+npm test           # vitest
+npx tsc --noEmit   # type check
+npm run build      # static export to out/
 ```
 
-2. Run dev server:
+Web MIDI needs a secure context (https or localhost) and a browser that implements
+`navigator.requestMIDIAccess`. Without it, the computer keyboard (rows `z…,` and `q…i`,
+`-`/`=` octave, Space sustain) and touch/mouse on the piano work for exploration and step
+practice. MIDI monitoring (echo to an output) is off by default so a digital piano's local sound
+can be used while the app only observes input.
 
-```bash
-npm run dev
-```
+## Architecture
 
-3. Open `http://localhost:3000`.
+All features build on the shared contracts in `src/model/contracts.ts` (see
+`docs/adr/0001-shared-contracts-and-migration.md`). Core modules are deterministic TypeScript
+without React:
 
-## Tests
+| Module | Purpose |
+|---|---|
+| `src/music/` | Spelled pitches, intervals, chord definitions (adapter over the legacy symbol parser), scales/modes, keys, patterns, legacy text adapters |
+| `src/voicing/` | Explicit voicing recipes (close, open, shell, guide tones, rootless A/B), constraint engine, explainable voice leading |
+| `src/timeline/`, `src/playback/transport.ts` | One `PerformanceTimeline` for audio, highlighting, falling notes, export, and assessment; transport with clock mapping, count-in, loops, metronome, part mutes; Tone.js and Web MIDI engines |
+| `src/input/` | Normalised learner input, held/sustained state, pedals, hot-plug, monitoring, replay logs, AP-470 report template |
+| `src/practice/` | Exercise compiler, answer policies, step and timed sessions, feedback and evidence |
+| `src/content/` | Repository-authored concepts, exercises, warm-ups, melodies, charts, arrangements, routines, paths; validator and manifest (`src/content/AUTHORING.md`) |
+| `src/charts/`, `src/harmonisation/`, `src/scalelab/` | Chart expansion/editing/arrangements, diatonic and melody harmonisation, mode comparison and scale runs |
+| `src/persistence/` | Versioned local storage for projects, charts, preferences, progress; JSON export/import and backup |
+| `src/ui/` | Piano geometry and interactive piano, 2D falling-note stage, workspace shell, runtime wiring, mode and entry-point views |
 
-```bash
-npm test
-npm run smoke
-```
+Legacy modules (`src/parser`, `src/theory`, `src/playback/scheduler.ts`, `src/midi/buildMidiFile.ts`,
+`src/notation`, `src/ui/components`) are unchanged and wrapped by adapters.
 
-## Web MIDI Notes
+## Chord text format (still supported)
 
-- Web MIDI works in browsers that implement `navigator.requestMIDIAccess`.
-- If unsupported or denied, the UI disables device routing and keeps internal synth playback enabled.
-- To use Web MIDI output:
-  1. Connect your external MIDI device.
-  2. Select `Playback Target -> Web MIDI Device`.
-  3. Pick the output port in `MIDI Output`.
-  4. Click `Refresh MIDI Devices` if the device was connected after page load.
+One event per line: `<chord_symbol> [| duration_measures]`; blank lines and `#` comments are
+ignored; rests are `NC` / `N.C.`. Supported symbols: triads (maj, m, dim, aug, sus2, sus4),
+6ths, 7ths (7, maj7, m7, dim7, m7b5/ø, m(maj7)), 9/11/13 families, add tones, alterations
+(b5, #5, b9, #9, #11, b13), slash bass. Text export discloses what it cannot represent
+(per-chord voicings, key, titles).
 
-## Project Structure
+## Content status
 
-```text
-app/
-  layout.tsx
-  page.tsx
-  globals.css
-src/
-  parser/
-    parseChordSequence.ts
-  theory/
-    notes.ts
-    chordParser.ts
-    pathways.ts
-    voicing.ts
-    renderSequence.ts
-  notation/
-    generateMusicXml.ts
-  midi/
-    buildMidiFile.ts
-  playback/
-    types.ts
-    toneEngine.ts
-    webMidiEngine.ts
-    scheduler.ts
-  ui/components/
-    ChordStudio.tsx
-    ChordEditor.tsx
-    ChordPathwaysPanel.tsx
-    SettingsPanel.tsx
-    TransportBar.tsx
-    TimelineView.tsx
-    PianoKeyboard.tsx
-    LeadSheetView.tsx
-    SheetMusicView.tsx
-    EventPreviewTable.tsx
-  samples/
-    progressions.ts
-test/
-  parser.test.ts
-  pathways.test.ts
-  theory.test.ts
-  voicing.test.ts
-  smoke.test.ts
-```
+All shipped lessons, exercises, charts, and routines are **drafts** awaiting pianist and teacher
+review; the Learn catalogue flags them. Nothing is marked reviewed. Fingering is shown only for
+reviewed key/pattern combinations. Charts are original compositions; imports stay local.
 
-## Limitations / Next Steps
+## Known limitations
 
-- Lead-sheet rendering is an MVP chord-chart view (no full notation engraving yet).
-- For full notation and export, extend with MusicXML generation + OSMD, or VexFlow rendering with slash stems and rhythmic notation.
+- Verified in this iteration only with an offline harness (syntax, imports, pure-logic tests);
+  type-check, lint, Vitest, build, browser, and hardware checks are still to be run.
+- No pianist/learner review, no device matrix, no AP-470 physical test yet (see E21).
+- Drop-2/quartal voicings, MIDI import, the general recipe builder, and ear-training games are
+  deferred (M6).
