@@ -46,7 +46,7 @@ function isBarStart(beat: number, barLength: number): boolean {
  */
 export function buildMetronomeNotes(options: MetronomeOptions): PerformedNote[] {
   const barLength = options.beatsPerBar !== undefined && options.beatsPerBar > 0 ? options.beatsPerBar : 4;
-  const start = Math.ceil((options.startBeat ?? 0) - EPSILON);
+  const start = Math.ceil((options.startBeat ?? 0) - EPSILON) + 0; // "+ 0" turns Math.ceil's -0 into +0
   const duration = clickDurationBeats(options.bpm);
   const notes: PerformedNote[] = [];
   for (let beat = start; beat < options.endBeat - EPSILON; beat += 1) {
