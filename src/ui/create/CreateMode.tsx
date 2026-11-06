@@ -13,6 +13,7 @@ import { TimelineView } from "@/ui/components/TimelineView";
 import { BlockEditor } from "@/ui/create/BlockEditor";
 import { EventList } from "@/ui/create/EventList";
 import { ProjectMenu } from "@/ui/create/ProjectMenu";
+import { RecordButton, RecordingPanel } from "@/ui/create/RecordingPanel";
 import { canRedo, canUndo, deriveTextAndLost, previewPathways } from "@/ui/create/createState";
 import { NotationView } from "@/ui/notation/NotationView";
 import { notationEventsFromSequence, notationIndexOfEvent } from "@/ui/notation/notationAdapter";
@@ -167,6 +168,9 @@ export function CreateStage(): JSX.Element {
               {option.label}
             </button>
           ))}
+        </div>
+        <div className="pls-create__record">
+          <RecordButton />
         </div>
         <div className="pls-create__history">
           <button type="button" className="pls-btn pls-btn--small" disabled={!canUndo(editor)} onClick={() => dispatch({ type: "undo" })} title={undoLabel ? `Undo: ${undoLabel}` : "Undo"}>
@@ -464,6 +468,7 @@ export function CreateContextPanel(): JSX.Element {
     <>
       <OnboardingCard />
       <ProjectMenu />
+      <RecordingPanel />
       <ProgressionSettings />
       <PlaybackSettings />
       <PathwaysPanel />

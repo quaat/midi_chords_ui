@@ -30,6 +30,7 @@ import {
   useHeldState,
   useMaterial,
   usePianoTargets,
+  useRecording,
   useSounding,
   useStudioRuntime,
   useTransportState
@@ -154,6 +155,8 @@ function RuntimeTransport(): JSX.Element {
   const runtime = useStudioRuntime();
   const status = useTransportState();
   const material = useMaterial();
+  const recording = useRecording();
+  const capturing = recording.status === "recording" || recording.status === "countIn";
   const timeSignature = material.timeline ? material.timeline.timeSignature : undefined;
   const getPositionLabel = useCallback(() => formatPositionLabel(runtime.getTransportSnapshot().positionBeats, timeSignature), [runtime, timeSignature]);
   const barBeats = timeSignature ? Math.max(1, Math.round(beatsPerBar(timeSignature))) : 4;
@@ -174,6 +177,7 @@ function RuntimeTransport(): JSX.Element {
       playForMeActive={material.demonstrating}
       getPositionLabel={getPositionLabel}
       disabled={!material.timeline}
+      tempoLocked={capturing}
     />
   );
 }

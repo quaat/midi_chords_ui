@@ -7,7 +7,10 @@ interactive piano sits under three modes:
 - **Practice** — step practice (wait for an acceptable answer), timed practice with count-in and
   falling notes, listening, and free play with recording; feedback separates pitch from timing.
 - **Create** — chord blocks or chord text, per-chord voicing recipes, Chord Pathways, saved
-  projects, MIDI and MusicXML/notation export.
+  projects, MIDI and MusicXML/notation export, and a **performance recorder**: record what you
+  play (MIDI keyboard, computer keys or on-screen piano) with its real timing, velocities and
+  sustain pedal, loop the take as a backing track while you play along, save it locally and
+  export it as a standard `.mid` file (see `docs/adr/0002-performance-recorder.md`).
 
 Content entry points open material into the same workspace: a searchable **Learn** catalogue
 with concept pages and three entry routes, a **Songs** collection with editable charts and
@@ -47,10 +50,11 @@ without React:
 | `src/voicing/` | Explicit voicing recipes (close, open, shell, guide tones, rootless A/B), constraint engine, explainable voice leading |
 | `src/timeline/`, `src/playback/transport.ts` | One `PerformanceTimeline` for audio, highlighting, falling notes, export, and assessment; transport with clock mapping, count-in, loops, metronome, part mutes; Tone.js and Web MIDI engines |
 | `src/input/` | Normalised learner input, held/sustained state, pedals, hot-plug, monitoring, replay logs, AP-470 report template |
+| `src/recording/` | Performance recorder: event capture relative to an explicit start, note pairing (pedal-aware), take → `PerformanceTimeline`, click track, `.mid` export with pedal controllers |
 | `src/practice/` | Exercise compiler, answer policies, step and timed sessions, feedback and evidence |
 | `src/content/` | Repository-authored concepts, exercises, warm-ups, melodies, charts, arrangements, routines, paths; validator and manifest (`src/content/AUTHORING.md`) |
 | `src/charts/`, `src/harmonisation/`, `src/scalelab/` | Chart expansion/editing/arrangements, diatonic and melody harmonisation, mode comparison and scale runs |
-| `src/persistence/` | Versioned local storage for projects, charts, preferences, progress; JSON export/import and backup |
+| `src/persistence/` | Versioned local storage for projects, charts, recordings, preferences, progress; JSON export/import and backup |
 | `src/ui/` | Piano geometry and interactive piano, 2D falling-note stage, workspace shell, runtime wiring, mode and entry-point views |
 
 Legacy modules (`src/parser`, `src/theory`, `src/playback/scheduler.ts`, `src/midi/buildMidiFile.ts`,
@@ -77,3 +81,6 @@ reviewed key/pattern combinations. Charts are original compositions; imports sta
 - No pianist/learner review, no device matrix, no AP-470 physical test yet (see E21).
 - Drop-2/quartal voicings, MIDI import, the general recipe builder, and ear-training games are
   deferred (M6).
+- Recorder: one take at a time (no overdub/multitrack), fixed tempo per take, pickups during a
+  count-in are not captured, recordings are not part of the backup file; browser/hardware
+  verification pending (`docs/verification/midi-recorder-checklist.md`).

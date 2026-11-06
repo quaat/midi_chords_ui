@@ -60,6 +60,19 @@ function buildTrackChunk(events: TimedEvent[]): Uint8Array {
   return new Uint8Array([0x4d, 0x54, 0x72, 0x6b, ...numberToBytes(bytes.length, 4), ...bytes]);
 }
 
+/** Track-name text as bytes (ASCII subset; other characters become "?"), at most 127 bytes. */
+function encodeTrackName(name: string): number[] {
+  const out: number[] = [];
+  for (const char of name) {
+    const code = char.charCodeAt(0);
+    out.push(code >= 0x20 && code <= 0x7e ? code : 0x3f);
+    if (out.length >= 127) {
+      break;
+    }
+  }
+  return out;
+}
+
 function buildHeaderChunk(ppq: number): Uint8Array {
   return new Uint8Array([0x4d, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, ...numberToBytes(ppq, 2)]);
 }
@@ -88,6 +101,26 @@ export interface TimelineMidiOptions {
   channelByPart?: Partial<Record<PartId, number>>;
   /** Tempo override; default the timeline tempo. */
   tempoBpm?: number;
+  /**
+   * "part" (default): every note of a part goes to that part's routed channel.
+   * "note": a note's own `channel` (1-based) wins when present; notes without one use the part channel.
+   */
+  channelMode?: "part" | "note";
+  /** Controller (CC) events to write, e.g. recorded sustain pedal. */
+  controllers?: MidiControllerEvent[];
+  /** Sequence/track name meta event (FF 03) at tick 0. */
+  trackName?: string;
+}
+
+export interface MidiControllerEvent {
+  /** Musical time in quarter-note beats. */
+  beat: number;
+  /** 1-based channel. */
+  channel: number;
+  /** Controller number 0..127 (64 = sustain). */
+  controller: number;
+  /** 0..127 */
+  value: number;
 }
 
 export interface TimelineMidiResult {
@@ -117,15 +150,25 @@ export function buildMidiFromTimeline(timeline: PerformanceTimeline, options: Ti
     events.push({ tick, priority, seq: seq++, data });
   };
 
+  if (options.trackName !== undefined && options.trackName !== "") {
+    const text = encodeTrackName(options.trackName);
+    push(0, -1, [0xff, 0x03, ...encodeVarLen(text.length), ...text]);
+  }
   push(0, 0, [0xff, 0x58, 0x04, timeline.timeSignature.numerator & 0xff, denominatorPow, 24, 8]);
   push(0, 1, [0xff, 0x51, 0x03, ...numberToBytes(tempoMicros, 3)]);
 
   const notes = timeline.notes.filter((note) => parts.includes(note.part) && note.durationBeats > 0 && note.midi >= 0 && note.midi <= 127);
+  const channelOf = (note: PerformedNote): number => {
+    if (options.channelMode === "note" && typeof note.channel === "number" && Number.isFinite(note.channel)) {
+      return clampChannelIndex(note.channel);
+    }
+    return clampChannelIndex(channels[note.part]);
+  };
 
   // Program changes for each melodic channel in use.
   const programmed = new Set<number>();
   notes.forEach((note) => {
-    const ch = clampChannelIndex(channels[note.part]);
+    const ch = channelOf(note);
     if (ch === DRUM_CHANNEL_INDEX || programmed.has(ch)) {
       return;
     }
@@ -134,11 +177,25 @@ export function buildMidiFromTimeline(timeline: PerformanceTimeline, options: Ti
     push(0, 2, [0xc0 | ch, program]);
   });
 
+  // Controller events (priority 4: after set-up, before note-offs/ons at the same tick).
+  let controllerTick = 0;
+  (options.controllers ?? []).forEach((event) => {
+    if (!Number.isFinite(event.beat) || event.beat < 0) {
+      return;
+    }
+    const tick = Math.round(event.beat * ppq);
+    const ch = clampChannelIndex(event.channel);
+    const controller = Math.min(127, Math.max(0, Math.round(event.controller)));
+    const value = Math.min(127, Math.max(0, Math.round(event.value)));
+    push(tick, 4, [0xb0 | ch, controller, value]);
+    controllerTick = Math.max(controllerTick, tick);
+  });
+
   // Group per (channel, pitch) so overlapping attacks of the same pitch retrigger cleanly:
   // a note is cut where the next attack of the same pitch begins.
   const groups = new Map<string, { ch: number; midi: number; notes: PerformedNote[] }>();
   notes.forEach((note) => {
-    const ch = clampChannelIndex(channels[note.part]);
+    const ch = channelOf(note);
     const key = `${ch}:${note.midi}`;
     const group = groups.get(key);
     if (group) {
@@ -148,7 +205,7 @@ export function buildMidiFromTimeline(timeline: PerformanceTimeline, options: Ti
     }
   });
 
-  let lastTick = Math.round(Math.max(0, timeline.totalBeats) * ppq);
+  let lastTick = Math.max(controllerTick, Math.round(Math.max(0, timeline.totalBeats) * ppq));
   groups.forEach((group) => {
     const sorted = [...group.notes].sort((a, b) => a.onsetBeat - b.onsetBeat);
     for (let i = 0; i < sorted.length; i += 1) {

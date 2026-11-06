@@ -2917,3 +2917,167 @@ tbody tr.selected {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* --- Create: performance recorder --------------------------------------- */
+
+.pls-create__record {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pls-record__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.pls-record__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-strong);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pls-record__badge--recording {
+  background: color-mix(in oklab, var(--error) 18%, var(--bg-strong));
+  color: var(--error);
+}
+
+.pls-record__badge--countin {
+  background: var(--pls-demo-tint);
+  color: #6b4a00;
+}
+
+.pls-record__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--error);
+  animation: pls-record-pulse 1s ease-in-out infinite;
+}
+
+@keyframes pls-record-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.pls-record__clock {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+
+/* Record = red outline; while recording the button is filled red (state is also written as text). */
+.pls-btn--record {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.pls-btn--record:hover:not(:disabled) {
+  border-color: var(--error);
+  background: color-mix(in oklab, var(--error) 12%, var(--bg-strong));
+}
+
+.pls-btn--recording {
+  background: var(--error);
+  border-color: var(--error);
+  color: #ffffff;
+}
+
+.pls-btn--recording:hover:not(:disabled) {
+  border-color: var(--error);
+}
+
+.pls-record__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pls-record__take {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.pls-record__meta {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.pls-record__preview {
+  display: block;
+  width: 100%;
+  height: 84px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--pls-stage-bg);
+}
+
+.pls-record__preview-note {
+  fill: var(--pls-note-accomp);
+  stroke: var(--pls-note-stroke);
+  stroke-width: 0.5;
+}
+
+.pls-record__preview-bar {
+  stroke: var(--pls-stage-grid-bar);
+  stroke-width: 1;
+}
+
+.pls-record__saved {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.pls-record__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pls-record__list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.pls-record__item-title {
+  flex: 1 1 120px;
+  min-width: 0;
+  text-align: left;
+}
+
+.pls-record__item-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.pls-record__rename {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}

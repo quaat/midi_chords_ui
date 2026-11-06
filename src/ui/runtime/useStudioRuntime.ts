@@ -16,6 +16,7 @@ import type {
   PianoTargetsOverride,
   PlaybackOptions,
   PositionState,
+  RecordingState,
   SoundingState,
   StudioRuntimeCore,
   UiState
@@ -69,6 +70,11 @@ export function usePracticeRequest(): PracticeRequest | null {
 
 export function usePlaybackOptions(): PlaybackOptions {
   return useRuntimeStore(useStudioRuntime().playbackStore);
+}
+
+/** Recorder state (status, take, counts); live elapsed time is read from `runtime.recorder.elapsedMs()`. */
+export function useRecording(): RecordingState {
+  return useRuntimeStore(useStudioRuntime().recordingStore);
 }
 
 export function useUiState(): UiState {

@@ -20,23 +20,39 @@ import type {
   MusicalSequence,
   PerformanceTimeline,
   PerformedNote,
-  ProjectFile
+  ProjectFile,
+  TimeSignatureSpec
 } from "@/model/contracts";
 import { PROJECT_SCHEMA_VERSION } from "@/model/contracts";
 import type { ArpeggiateOctaves } from "@/types";
 import type { HeldChange, MidiAccessInfo, MidiPortInfo as InputPortInfo } from "@/input";
 import { ComputerKeyboardInput, HeldStateTracker, MidiInputManager, TouchInput } from "@/input";
-import type { OnboardingChoice, PersistenceStores, Preferences, Result } from "@/persistence";
+import type { OnboardingChoice, PersistenceStores, Preferences, RecordingSummary, Result } from "@/persistence";
 import { DEFAULT_PREFERENCES, createMemoryAdapter, createStores, projectNeedsRecompile, withRecompiledSequence } from "@/persistence";
 import type { LoopRegion, TransportStatus } from "@/playback/transport";
 import { Transport } from "@/playback/transport";
 import { ToneTimelineEngine, WebMidiTimelineEngine } from "@/playback/timelineEngines";
 import { buildMidiFromTimeline } from "@/midi/timelineToMidi";
+import type { PerformanceRecording, RecordedNote, RecorderStatus, RecordingTimelineResult } from "@/recording";
+import {
+  MAX_RECORDING_MS,
+  PerformanceRecorder,
+  buildClickTimeline,
+  buildMidiFromRecording,
+  countNoteOns,
+  formatClock,
+  isClickTimeline,
+  msToBeats,
+  pairRecordedNotes,
+  recordingFileName,
+  recordingTimeline
+} from "@/recording";
 import { sequenceFromParsedText } from "@/music/legacy";
 import { SAMPLE_PROGRESSIONS } from "@/samples/progressions";
 import type { EntryView, InputSourceSelection, SessionState, SessionStore, Store } from "@/state/sessionStore";
 import { createSessionStore, createStore } from "@/state/sessionStore";
 import type { CompileTimelineOptions } from "@/timeline/compile";
+import { beatsPerBar } from "@/timeline/clock";
 import { compileTimelineWithDiagnostics } from "@/timeline/compile";
 import type { CreateAction, CreateState } from "@/ui/create/createState";
 import { createInitialCreateState, createReducer } from "@/ui/create/createState";
@@ -69,7 +85,7 @@ import { voiceSequenceForPlayback } from "@/ui/runtime/voicingBridge";
 // ---------------------------------------------------------------------------
 
 export type EngineKind = "tone" | "webmidi";
-export type MaterialSourceKind = "project" | "exercise" | "chart" | "scratch";
+export type MaterialSourceKind = "project" | "exercise" | "chart" | "scratch" | "recording";
 
 export interface MaterialState {
   sequence: MusicalSequence | null;
@@ -172,6 +188,44 @@ export interface UiState {
 export interface ActionResult {
   ok: boolean;
   message: string;
+}
+
+/** Recorder state for the Create recording panel (live counts come from the recorder; the take is explicit). */
+export interface RecordingState {
+  status: RecorderStatus;
+  /** The finished take (in memory until saved/discarded). */
+  take: PerformanceRecording | null;
+  /** Notes derived from `take`. */
+  notes: RecordedNote[];
+  /** Attacks captured so far (live) or in the take. */
+  noteCount: number;
+  warnings: string[];
+  message: string | null;
+  /** Id under which `take` is saved; null when the take is unsaved. */
+  savedId: string | null;
+  /** True when `take` differs from its saved copy (or was never saved). */
+  dirty: boolean;
+  /** Round the playback/loop length to whole bars (see `fitLengthToBars`). */
+  fitToBars: boolean;
+  /** Count-in the current/last take was started with. */
+  countInBeats: number;
+  /** Bumped whenever the saved recording list changes. */
+  listVersion: number;
+}
+
+export interface RecordingSettings {
+  tempoBpm: number;
+  timeSignature: TimeSignatureSpec;
+  countInBeats: number;
+  metronome: boolean;
+}
+
+interface RecordingClickSession {
+  /** Timeline that was in the transport before the click track (restored afterwards). */
+  original: PerformanceTimeline | null;
+  loop: LoopRegion | null;
+  /** True once the transport actually started the click track. */
+  started: boolean;
 }
 
 export interface EditorStore extends Store<CreateState> {
@@ -278,6 +332,9 @@ export class StudioRuntimeCore {
   readonly heldStore: Store<HeldStateSnapshot>;
   readonly positionStore: Store<PositionState>;
   readonly uiStore: Store<UiState>;
+  readonly recordingStore: Store<RecordingState>;
+  /** Framework-free performance recorder; fed by every learner input source while `start()`ed. */
+  readonly recorder: PerformanceRecorder;
 
   readonly input: {
     held: HeldStateTracker;
@@ -328,6 +385,10 @@ export class StudioRuntimeCore {
   private prefsTimer: ReturnType<typeof setTimeout> | null = null;
   private lastInputSource: InputSourceSelection;
   private requestCounter = 0;
+  private recordingClick: RecordingClickSession | null = null;
+  private recordingTimer: ReturnType<typeof setTimeout> | null = null;
+  private takeCounter = 0;
+  private takeTimelineCache: { take: PerformanceRecording; fitToBars: boolean; result: RecordingTimelineResult } | null = null;
 
   constructor() {
     this.session = createSessionStore();
@@ -381,6 +442,21 @@ export class StudioRuntimeCore {
     this.heldStore = createStore<HeldStateSnapshot>({ pressed: [], sustained: [], sustainDown: false, sostenutoDown: false, softDown: false });
     this.positionStore = createStore<PositionState>({ index: -1, current: null, next: null, sounding: false, timelineId: null });
     this.uiStore = createStore<UiState>({ onboardingVisible: false, onboardingChoice: null, storageMessage: null, storesReady: false, projectListVersion: 0 });
+    this.recorder = new PerformanceRecorder();
+    this.recordingStore = createStore<RecordingState>({
+      status: "idle",
+      take: null,
+      notes: [],
+      noteCount: 0,
+      warnings: [],
+      message: null,
+      savedId: null,
+      dirty: false,
+      fitToBars: false,
+      countInBeats: 0,
+      listVersion: 0
+    });
+    this.recorder.subscribe(() => this.syncRecorder());
 
     this.audition = {
       playChord: (notes: number[], durationBeats: number = 2) => this.playAudition(chordAuditionNotes(notes, durationBeats)),
@@ -415,6 +491,11 @@ export class StudioRuntimeCore {
     cleanups.push(this.input.held.onChange((change) => this.onHeldChange(change)));
     cleanups.push(this.input.computerKeyboard.onEvent((event) => this.input.held.apply(event)));
     cleanups.push(this.input.touch.onEvent((event) => this.input.held.apply(event)));
+    // Recorder: every learner source, never transport/audition output (playback is never recorded).
+    cleanups.push(this.input.midi.onEvent((event) => this.recorder.handleEvent(event)));
+    cleanups.push(this.input.computerKeyboard.onEvent((event) => this.recorder.handleEvent(event)));
+    cleanups.push(this.input.touch.onEvent((event) => this.recorder.handleEvent(event)));
+    cleanups.push(this.watchUnload());
     cleanups.push(this.input.midi.onDevicesChanged(() => this.refreshDevices()));
     cleanups.push(this.input.midi.onAccessChanged((info) => this.applyAccessInfo(info)));
     cleanups.push(this.session.subscribe(() => this.onSessionChange()));
@@ -432,6 +513,9 @@ export class StudioRuntimeCore {
     }
 
     return () => {
+      if (this.recorder.isActive()) {
+        this.stopRecording();
+      }
       this.started = false;
       cleanups.forEach((cleanup) => cleanup());
       this.syncKeyboardAttachment();
@@ -523,6 +607,11 @@ export class StudioRuntimeCore {
     if (this.demo) {
       this.demo = null;
     }
+    if (this.recordingClick) {
+      // Other material takes the transport: the take keeps recording, just without the click track.
+      this.recordingClick = null;
+      this.scheduleRecorderTick();
+    }
     const status = this.transport.getSnapshot();
     const wasActive = isActive(status);
     this.transport.load(timeline, { keepPosition: sameSource });
@@ -565,7 +654,8 @@ export class StudioRuntimeCore {
   ensureEditorMaterial(): void {
     const material = this.materialStore.getState();
     const sequence = this.editor.getState().present.sequence;
-    if (material.demonstrating) {
+    if (material.demonstrating || material.sourceKind === "recording") {
+      // A recorded take chosen as backing track stays loaded across mode switches (the Create notice offers the progression).
       return;
     }
     if (material.sourceKind !== "project" || material.sourceId !== sequence.id || material.sequence !== sequence) {
@@ -663,6 +753,20 @@ export class StudioRuntimeCore {
   }
 
   private onTransportState(status: TransportStatus): void {
+    const click = this.recordingClick;
+    if (click) {
+      if (isActive(status)) {
+        click.started = true;
+        this.recorder.tick();
+      } else if (click.started) {
+        // Stop button, pause or the end of the click track: finish the take (deferred, outside the notification).
+        void Promise.resolve().then(() => {
+          if (this.recordingClick === click) {
+            this.stopRecording();
+          }
+        });
+      }
+    }
     const demo = this.demo;
     if (demo) {
       if (isActive(status)) {
@@ -918,6 +1022,10 @@ export class StudioRuntimeCore {
   }
 
   selectInput(id: string | null): void {
+    const previous = this.input.midi.getSelectedInputId();
+    if (previous !== null && previous !== id) {
+      this.recorder.closePort(previous, nowMs(), "The MIDI input was switched; notes held on the previous device were closed.");
+    }
     const attached = this.input.midi.selectInput(id);
     this.refreshDevices();
     const name = id === null ? null : this.devicesStore.getState().inputs.find((port) => port.id === id)?.name ?? id;
@@ -984,6 +1092,7 @@ export class StudioRuntimeCore {
 
   /** Release everything: learner input, monitoring, playback and audition outputs. */
   panic(): void {
+    this.recorder.reset(nowMs(), "All notes were released (panic).");
     this.input.touch.releaseAll();
     this.input.computerKeyboard.releaseAll();
     this.input.midi.panic();
@@ -1364,5 +1473,428 @@ export class StudioRuntimeCore {
     const result = buildMidiFromTimeline(timeline, { mutedParts: status.mutedParts });
     const fileName = `${state.project.name.replace(/[^A-Za-z0-9 _-]+/g, "").trim().replace(/\s+/g, "-") || "progression"}.mid`;
     return { bytes: result.bytes, blob: result.blob, fileName };
+  }
+
+  // -------------------------------------------------------------------------
+  // Performance recorder (record → play/loop as backing track → save → export)
+  //
+  // Integration: a finished take is converted to a PerformanceTimeline (part "accompaniment") and
+  // loaded into the MAIN transport as material of kind "recording" — the same path exercises and
+  // charts use — so play/pause/loop/tempo/metronome/output routing, piano highlighting and the
+  // position strip all work unchanged, and the editor document is never replaced. While a take is
+  // captured with a count-in/metronome, a click-track timeline is played by the transport and the
+  // previous material (and loop) is restored when the take stops.
+  // -------------------------------------------------------------------------
+
+  private syncRecorder(): void {
+    const snapshot = this.recorder.getSnapshot();
+    this.recordingStore.setState({ status: snapshot.status, noteCount: snapshot.noteCount, warnings: snapshot.warnings });
+  }
+
+  private watchUnload(): () => void {
+    if (typeof window === "undefined" || typeof window.addEventListener !== "function") {
+      return () => undefined;
+    }
+    const onBeforeUnload = (event: BeforeUnloadEvent): void => {
+      const state = this.recordingStore.getState();
+      if (this.recorder.isActive() || (state.take !== null && state.dirty)) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }
+
+  /** Make sure a count-in that lost its click track still flips the recorder to "recording". */
+  private scheduleRecorderTick(): void {
+    const zero = this.recorder.getSnapshot().zeroMs;
+    if (zero === null) {
+      return;
+    }
+    const delay = Math.max(0, zero - nowMs());
+    setTimeout(() => this.recorder.tick(), delay + 1);
+  }
+
+  /** Tempo (override included), meter, count-in and metronome the next take will use. */
+  recordingSettings(): RecordingSettings {
+    const status = this.transport.getSnapshot();
+    const timeline = this.transport.getTimeline();
+    const timeSignature = timeline ? timeline.timeSignature : this.editor.getState().present.sequence.timeSignature;
+    return { tempoBpm: status.tempoBpm, timeSignature: { ...timeSignature }, countInBeats: status.countInBeats, metronome: status.metronomeEnabled };
+  }
+
+  /**
+   * Start a take. Any playback (material, demonstration, audition) is stopped first. With a count-in
+   * or metronome enabled on the transport, a click track plays and beat 0 of the take is the end of
+   * the count-in; otherwise the take starts immediately. A previous unsaved take is replaced.
+   */
+  async startRecording(): Promise<ActionResult> {
+    if (this.recorder.isActive()) {
+      return { ok: false, message: "Already recording." };
+    }
+    if (this.demo) {
+      this.stopDemonstration();
+    }
+    this.stopAudition();
+    const settings = this.recordingSettings();
+    const bpm = settings.tempoBpm;
+    this.transport.stop();
+    this.takeCounter += 1;
+    const title = `Take ${this.takeCounter}`;
+    let zeroMs = nowMs();
+    let countInBeats = 0;
+    if (settings.countInBeats > 0 || settings.metronome) {
+      const bar = beatsPerBar(settings.timeSignature.numerator, settings.timeSignature.denominator);
+      const totalBeats = (Math.ceil(msToBeats(MAX_RECORDING_MS, bpm) / bar) + 1) * bar;
+      const click = buildClickTimeline({ bpm, timeSignature: settings.timeSignature, totalBeats, metronome: settings.metronome });
+      const session: RecordingClickSession = { original: this.transport.getTimeline(), loop: this.transport.getSnapshot().loop, started: false };
+      this.recordingClick = session;
+      if (session.loop) {
+        this.transport.setLoop(null);
+      }
+      this.transport.load(click);
+      await this.transport.play(0);
+      if (this.recordingClick === session && isActive(this.transport.getSnapshot())) {
+        // Beat 0 of the take = the transport's beat 0 (negative position during the count-in).
+        const snapshot = this.transport.getSnapshot();
+        zeroMs = nowMs() - snapshot.positionSeconds * 1000;
+        countInBeats = settings.countInBeats;
+      } else {
+        // The output could not start (or other material took the transport): record without the click.
+        if (this.recordingClick === session) {
+          this.recordingClick = null;
+          this.restoreAfterClick(session);
+        }
+        zeroMs = nowMs();
+      }
+    }
+    const started = this.recorder.start({
+      tempo: { bpm },
+      timeSignature: settings.timeSignature,
+      countInBeats,
+      zeroMs,
+      title,
+      initialPedals: this.input.held.snapshot()
+    });
+    if (!started) {
+      return { ok: false, message: "Already recording." };
+    }
+    const delay = Math.max(0, zeroMs - nowMs()) + MAX_RECORDING_MS + 50;
+    this.recordingTimer = setTimeout(() => {
+      this.recordingTimer = null;
+      if (this.recorder.isActive()) {
+        this.stopRecording();
+      }
+    }, delay);
+    this.takeTimelineCache = null;
+    this.recordingStore.setState({ take: null, notes: [], savedId: null, dirty: false, message: null, countInBeats });
+    this.syncRecorder();
+    return { ok: true, message: countInBeats > 0 ? "Count-in…" : "Recording." };
+  }
+
+  private restoreAfterClick(session: RecordingClickSession): void {
+    this.transport.stop();
+    if (!isClickTimeline(this.transport.getTimeline())) {
+      return;
+    }
+    if (session.original) {
+      this.transport.load(session.original);
+    } else {
+      this.loadEditorSequence();
+    }
+    if (session.loop) {
+      this.transport.setLoop(session.loop);
+    }
+    this.updatePosition();
+  }
+
+  /** Finish the take. Held notes/pedal are closed at the stop boundary by note pairing. */
+  stopRecording(): ActionResult {
+    if (!this.recorder.isActive()) {
+      return { ok: false, message: "Not recording." };
+    }
+    if (this.recordingTimer !== null) {
+      clearTimeout(this.recordingTimer);
+      this.recordingTimer = null;
+    }
+    const take = this.recorder.stop();
+    const session = this.recordingClick;
+    this.recordingClick = null;
+    if (session) {
+      this.restoreAfterClick(session);
+    }
+    if (!take || countNoteOns(take.events) === 0) {
+      this.recorder.discard();
+      const message = "Nothing was played, so no take was kept.";
+      this.recordingStore.setState({ take: null, notes: [], savedId: null, dirty: false, message });
+      this.syncRecorder();
+      return { ok: false, message };
+    }
+    const notes = pairRecordedNotes(take.events, take.durationMs);
+    this.takeTimelineCache = null;
+    const message = `Recorded ${notes.length} note${notes.length === 1 ? "" : "s"} in ${formatClock(take.durationMs)}.`;
+    this.recordingStore.setState({ take, notes, savedId: null, dirty: true, fitToBars: take.countInBeats > 0, message });
+    this.syncRecorder();
+    return { ok: true, message };
+  }
+
+  /** Abort a running take or drop the finished one. The progression comes back if the take was playing. */
+  discardRecording(): void {
+    if (this.recorder.isActive()) {
+      if (this.recordingTimer !== null) {
+        clearTimeout(this.recordingTimer);
+        this.recordingTimer = null;
+      }
+      const session = this.recordingClick;
+      this.recordingClick = null;
+      this.recorder.discard();
+      if (session) {
+        this.restoreAfterClick(session);
+      }
+    }
+    const take = this.recordingStore.getState().take;
+    if (take && this.isTakeLoaded(take)) {
+      this.transport.stop();
+      this.loadEditorSequence();
+    }
+    this.recorder.discard();
+    this.takeTimelineCache = null;
+    this.recordingStore.setState({ take: null, notes: [], savedId: null, dirty: false, message: "Take discarded." });
+    this.syncRecorder();
+  }
+
+  /** True while the take's timeline is the transport material. */
+  isTakeLoaded(take?: PerformanceRecording | null): boolean {
+    const current = take ?? this.recordingStore.getState().take;
+    if (!current) {
+      return false;
+    }
+    const material = this.materialStore.getState();
+    return material.sourceKind === "recording" && material.sourceId === current.id;
+  }
+
+  private takeTimeline(take: PerformanceRecording): RecordingTimelineResult {
+    const state = this.recordingStore.getState();
+    const cache = this.takeTimelineCache;
+    if (cache && cache.take === take && cache.fitToBars === state.fitToBars) {
+      return cache.result;
+    }
+    const result = recordingTimeline(take, { fitToBars: state.fitToBars, notes: state.take === take ? state.notes : undefined });
+    this.takeTimelineCache = { take, fitToBars: state.fitToBars, result };
+    return result;
+  }
+
+  /** The take's playback timeline (as it would be loaded), or null without a take. */
+  recordingTimeline(): PerformanceTimeline | null {
+    const take = this.recordingStore.getState().take;
+    return take ? this.takeTimeline(take).timeline : null;
+  }
+
+  private loadTakeIntoTransport(take: PerformanceRecording): void {
+    if (this.isTakeLoaded(take)) {
+      return;
+    }
+    if (this.demo) {
+      this.stopDemonstration();
+    }
+    this.stopAudition();
+    const { timeline } = this.takeTimeline(take);
+    this.loadTimeline(timeline, { sourceKind: "recording", sourceId: take.id, title: take.title });
+  }
+
+  /** Load the take as the transport material (if needed) and play/resume it. */
+  async playRecording(): Promise<ActionResult> {
+    const take = this.recordingStore.getState().take;
+    if (!take || this.recorder.isActive()) {
+      return { ok: false, message: "There is no take to play." };
+    }
+    this.loadTakeIntoTransport(take);
+    await this.transport.play();
+    return { ok: true, message: "Playing the take." };
+  }
+
+  pauseRecordingPlayback(): void {
+    if (this.isTakeLoaded()) {
+      this.transport.pause();
+    }
+  }
+
+  stopRecordingPlayback(): void {
+    if (this.isTakeLoaded()) {
+      this.transport.stop();
+    }
+  }
+
+  /** Play the take from the beginning (restarts while playing). */
+  async restartRecordingPlayback(): Promise<ActionResult> {
+    const take = this.recordingStore.getState().take;
+    if (!take || this.recorder.isActive()) {
+      return { ok: false, message: "There is no take to play." };
+    }
+    this.loadTakeIntoTransport(take);
+    await this.transport.play(0);
+    return { ok: true, message: "Playing the take from the start." };
+  }
+
+  /** Loop the whole take (its full length, trailing silence included; bar-fitted when enabled). */
+  setRecordingLoop(enabled: boolean): void {
+    const take = this.recordingStore.getState().take;
+    if (!take || this.recorder.isActive()) {
+      return;
+    }
+    this.loadTakeIntoTransport(take);
+    const total = this.transport.getSnapshot().totalBeats;
+    this.transport.setLoop(enabled && total > 0 ? { startBeat: 0, endBeat: total } : null);
+  }
+
+  /** Fit the take's length to whole bars (reloads the timeline in place when it is playing). */
+  setRecordingFitToBars(enabled: boolean): void {
+    if (this.recordingStore.getState().fitToBars === enabled) {
+      return;
+    }
+    this.recordingStore.setState({ fitToBars: enabled });
+    this.takeTimelineCache = null;
+    const take = this.recordingStore.getState().take;
+    if (take && this.isTakeLoaded(take)) {
+      const looped = this.transport.getSnapshot().loop !== null;
+      const { timeline } = this.takeTimeline(take);
+      this.loadTimeline(timeline, { sourceKind: "recording", sourceId: take.id, title: take.title });
+      if (looped) {
+        this.transport.setLoop({ startBeat: 0, endBeat: timeline.totalBeats });
+      }
+    }
+  }
+
+  /** Rename the in-memory take (marks it unsaved). */
+  setRecordingTitle(title: string): void {
+    const trimmed = title.trim();
+    const take = this.recordingStore.getState().take;
+    if (!take || trimmed === "" || trimmed === take.title) {
+      return;
+    }
+    const renamed = this.recorder.retitle(trimmed);
+    if (!renamed) {
+      return;
+    }
+    this.takeTimelineCache = null;
+    this.recordingStore.setState({ take: renamed, dirty: true });
+    if (this.isTakeLoaded(renamed)) {
+      this.materialStore.setState({ title: renamed.title });
+    }
+  }
+
+  /** Save the take locally. On failure the in-memory take is kept so it can still be exported. */
+  saveRecording(options: { title?: string } = {}): ActionResult {
+    if (this.recorder.isActive()) {
+      return { ok: false, message: "Stop recording before saving." };
+    }
+    if (options.title !== undefined) {
+      this.setRecordingTitle(options.title);
+    }
+    const take = this.recordingStore.getState().take;
+    if (!take) {
+      return { ok: false, message: "There is no take to save." };
+    }
+    const result = this.stores.recordings.save(take);
+    if (!result.ok) {
+      this.uiStore.setState({ storageMessage: result.error.message });
+      const message = `${result.error.message} The take is still open here; export it as MIDI to keep it.`;
+      this.recordingStore.setState({ message });
+      return { ok: false, message };
+    }
+    this.recorder.setTake(result.value);
+    this.takeTimelineCache = null;
+    const storage = this.stores.currentStatus();
+    const durable = storage.available ? "" : " (kept in memory only: this browser does not allow saving)";
+    const warn = result.warnings.length > 0 ? ` ${result.warnings.join(" ")}` : "";
+    const message = `Saved “${result.value.title}”${durable}.${warn}`;
+    this.recordingStore.setState((state) => ({ take: result.value, savedId: result.value.id, dirty: false, listVersion: state.listVersion + 1, message }));
+    if (this.isTakeLoaded(result.value)) {
+      this.materialStore.setState({ title: result.value.title });
+    }
+    this.syncRecorder();
+    return { ok: true, message };
+  }
+
+  listRecordings(): Result<RecordingSummary[]> {
+    return this.stores.recordings.list();
+  }
+
+  /** Open a saved recording as the current take (does not start playback). */
+  loadSavedRecording(id: string): ActionResult {
+    if (this.recorder.isActive()) {
+      return { ok: false, message: "Stop recording before opening a saved take." };
+    }
+    const found = this.stores.recordings.get(id);
+    if (!found.ok) {
+      return { ok: false, message: found.error.message };
+    }
+    if (!found.value) {
+      return { ok: false, message: "That recording no longer exists." };
+    }
+    const take = found.value;
+    const notes = pairRecordedNotes(take.events, take.durationMs);
+    this.recorder.setTake(take);
+    this.takeTimelineCache = null;
+    const message = `Opened “${take.title}”.${found.warnings.length > 0 ? ` ${found.warnings.join(" ")}` : ""}`;
+    this.recordingStore.setState({ take, notes, savedId: take.id, dirty: false, fitToBars: take.countInBeats > 0, countInBeats: take.countInBeats, message });
+    this.syncRecorder();
+    return { ok: true, message };
+  }
+
+  renameRecording(id: string, title: string): ActionResult {
+    const trimmed = title.trim();
+    if (trimmed === "") {
+      return { ok: false, message: "The recording needs a name." };
+    }
+    const state = this.recordingStore.getState();
+    if (state.take && state.take.id === id) {
+      this.setRecordingTitle(trimmed);
+      return state.savedId === id ? this.saveRecording() : { ok: true, message: "Renamed." };
+    }
+    const result = this.stores.recordings.rename(id, trimmed);
+    if (!result.ok) {
+      return { ok: false, message: result.error.message };
+    }
+    this.recordingStore.setState((current) => ({ listVersion: current.listVersion + 1 }));
+    return { ok: true, message: `Renamed to “${result.value.title}”.` };
+  }
+
+  /** Delete a saved recording. An open take with that id stays in memory (as unsaved). */
+  deleteRecording(id: string): ActionResult {
+    const removed = this.stores.recordings.remove(id);
+    if (!removed.ok) {
+      return { ok: false, message: removed.error.message };
+    }
+    const state = this.recordingStore.getState();
+    const patch: Partial<RecordingState> = { listVersion: state.listVersion + 1 };
+    let message = "Recording deleted.";
+    if (state.take && state.take.id === id) {
+      patch.savedId = null;
+      patch.dirty = true;
+      message = "Recording deleted; the open take is now unsaved.";
+    }
+    patch.message = message;
+    this.recordingStore.setState(patch);
+    return { ok: true, message };
+  }
+
+  /**
+   * Standard MIDI File of the current take (or of a saved recording by id): pressed note lengths,
+   * recorded channels, pedal CC events, tempo and time signature. Separate from `exportMidi()`
+   * (the authored progression).
+   */
+  exportRecordingMidi(id?: string): { bytes: Uint8Array; blob?: Blob; fileName: string } | null {
+    let recording = this.recordingStore.getState().take;
+    if (id !== undefined && (!recording || recording.id !== id)) {
+      const found = this.stores.recordings.get(id);
+      recording = found.ok ? found.value : null;
+    }
+    if (!recording) {
+      return null;
+    }
+    const result = buildMidiFromRecording(recording);
+    return { bytes: result.bytes, blob: result.blob, fileName: recordingFileName(recording.title) };
   }
 }

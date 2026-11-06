@@ -97,6 +97,30 @@ Files
   (saved as a new project, legacy text projects recompiled), `exportMidi()` (current arrangement,
   muted parts excluded), `currentProjectFile()`. All return `{ ok, message }` (or data).
 
+### Performance recorder (Create)
+
+- `recorder: PerformanceRecorder` (framework-free, `src/recording/`) — fed by MIDI, computer
+  keyboard and on-screen piano `onEvent` streams while started; transport/audition output never
+  reaches it. `recordingStore: Store<RecordingState>` — `{ status: idle | countIn | recording |
+  ready, take, notes, noteCount, warnings, message, savedId, dirty, fitToBars, countInBeats,
+  listVersion }`; live elapsed time is `recorder.elapsedMs()` (poll it, e.g. `LiveText`).
+- `startRecording()` (stops demo/audition/playback; with the transport's count-in or metronome on
+  it plays a click-track timeline and restores the previous material + loop afterwards; tempo =
+  transport tempo incl. override, meter = current material), `stopRecording()`, `discardRecording()`,
+  `recordingSettings()`.
+- Playback: the take is converted with `recordingTimeline()` (part `"accompaniment"`, sounding
+  lengths) and loaded into the main transport as material `sourceKind: "recording"` —
+  `playRecording()`, `pauseRecordingPlayback()`, `stopRecordingPlayback()`,
+  `restartRecordingPlayback()`, `setRecordingLoop(bool)` (whole take), `setRecordingFitToBars(bool)`,
+  `isTakeLoaded()`, `recordingTimeline()`. `ensureEditorMaterial()` leaves recording material in
+  place; the Create notice offers the progression back.
+- Storage: `saveRecording({ title? })`, `setRecordingTitle()`, `listRecordings()`,
+  `loadSavedRecording(id)`, `renameRecording(id, title)`, `deleteRecording(id)`; a failed save keeps
+  the take in memory. `exportRecordingMidi(id?)` → `{ bytes, blob?, fileName }` (separate from
+  `exportMidi()`, which exports the authored progression).
+- Hooks: `useRecording()`. UI: `src/ui/create/RecordingPanel.tsx` (`RecordingPanel`, `RecordButton`).
+  Decisions and trade-offs: `docs/adr/0002-performance-recorder.md`.
+
 ### Audition
 
 - `audition.playChord(midi[], durationBeats = 2)`, `audition.playNotes([{ midi, onsetBeat,

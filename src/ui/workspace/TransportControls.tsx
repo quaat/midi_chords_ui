@@ -28,6 +28,8 @@ export interface TransportControlsProps {
   getPositionLabel?: () => string;
   positionLabel?: string;
   disabled?: boolean;
+  /** Tempo and count-in are fixed while a take is being recorded. */
+  tempoLocked?: boolean;
   className?: string;
 }
 
@@ -80,6 +82,7 @@ export function TransportControls({
   getPositionLabel,
   positionLabel = "",
   disabled = false,
+  tempoLocked = false,
   className
 }: TransportControlsProps): JSX.Element {
   const tempoId = useId();
@@ -162,11 +165,12 @@ export function TransportControls({
             onChange={(event) => setDraft(event.target.value)}
             onBlur={commitTempo}
             onKeyDown={handleTempoKey}
-            disabled={disabled}
+            disabled={disabled || tempoLocked}
+            title={tempoLocked ? "The tempo is fixed while recording" : undefined}
           />
           <span className="pls-field__suffix">BPM</span>
         </div>
-        <Toggle pressed={countIn} onChange={onCountInChange} label="Count-in" icon={<Timer size={16} aria-hidden="true" />} disabled={disabled} />
+        <Toggle pressed={countIn} onChange={onCountInChange} label="Count-in" icon={<Timer size={16} aria-hidden="true" />} disabled={disabled || tempoLocked} />
         <Toggle pressed={loop} onChange={onLoopChange} label="Loop" icon={<Repeat size={16} aria-hidden="true" />} disabled={disabled} />
         <Toggle pressed={metronome} onChange={onMetronomeChange} label="Metronome" icon={<Clock size={16} aria-hidden="true" />} disabled={disabled} />
       </div>
